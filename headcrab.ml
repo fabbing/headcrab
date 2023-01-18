@@ -46,5 +46,10 @@ module Lambda = struct
     (* TODO E -> (E) *)
 
   (* An expression is a combinator if it does not have any free varaibles *)
-  let is_combinator = failwith("not implemented")
+  let rec is_combinator = function
+    | Variable var -> begin
+      match var with | Free _ -> false | Bounded _ -> true
+      end
+    | Abstraction (_, expr) -> is_combinator expr
+    | Application (expr1, expr2) -> is_combinator expr1 && is_combinator expr2
 end
