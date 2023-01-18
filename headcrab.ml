@@ -43,7 +43,36 @@ module Lambda = struct
        Left associative
      *)
     | Application of expression * expression
-    (* TODO E -> (E) *)
+
+
+  let make_variable name = Variable (Free name)
+
+  let make_abstraction meta body =
+    let rec bind = function
+      | Variable bound as var -> begin
+        match bound with
+        | Free name -> if name = meta then Variable (Bounded name) else var
+        | Bounded n -> var
+        end
+      | Abstraction (m, body) -> Abstraction (m, bind body)
+      | Application (e1, e2) -> Application (bind e1, bind e2)
+    in
+    Abstraction (meta, bind body)
+
+
+  let rec print = function
+    | Variable var -> begin
+      match var with
+      | Free name -> Printf.sprintf "%s" name
+      | Bounded name -> Printf.sprintf "_%s" name
+      end
+    | Abstraction (meta, expr) -> Printf.sprintf "λ _%s . %s" meta (print expr)
+    | Application (e1, e2) -> begin
+      match e2 with
+      | Application _ -> Printf.sprintf "%s (%s)" (print e1) (print e2)
+      | _ -> Printf.sprintf "%s %s" (print e1) (print e2)
+      end
+
 
   (* An expression is a combinator if it does not have any free varaibles *)
   let rec is_combinator = function
