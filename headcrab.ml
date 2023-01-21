@@ -63,25 +63,31 @@ module Lambda = struct
 
   let application e1 e2 = Application (e1, e2)
 
+  let var = variable
+  let abs = abstraction
+  let app = application
+
 
   let rec print = function
     | Variable var -> begin
       match var with
       | Free name -> Printf.sprintf "%s" name
-      | Bounded (name, index) -> Printf.sprintf "_%d_%s" index name
+      | Bounded (name, index) -> Printf.sprintf "_%s.%d" name index
       end
-    | Abstraction (meta, body) -> Printf.sprintf "λ _%s . %s" meta (print body)
+    | Abstraction (meta, body) -> Printf.sprintf "(λ _%s . %s)" meta (print body)
     | Application (e1, e2) -> begin
-      match e2 with
-      | Application _ -> Printf.sprintf "%s (%s)" (print e1) (print e2)
+      match e1, e2 with
+      | _, Application _ -> Printf.sprintf "%s (%s)" (print e1) (print e2)
       | _ -> Printf.sprintf "%s %s" (print e1) (print e2)
       end
 
 
   let rec is_free expr var =
     match expr with
-    | Variable v -> (match v with | Free name when name = var -> true | _ -> false)
-    | Abstraction (meta, body) -> if meta <> var then is_free body var else false
+    | Variable v ->
+        (match v with | Free name when name = var -> true | _ -> false)
+    | Abstraction (meta, body) ->
+        if meta <> var then is_free body var else false
     | Application (e1, e2) -> is_free e1 var || is_free e2 var
 
 
@@ -90,4 +96,47 @@ module Lambda = struct
     | Variable var -> (match var with | Free _ -> false | Bounded _ -> true)
     | Abstraction (_, body) -> is_combinator body
     | Application (e1, e2) -> is_combinator e1 && is_combinator e2
+
+
+  (*
+    α-equivalence is when two functions vary only by the names of the bound
+    variables.
+
+    E₁ =α= E₂
+  *)
+  let rec alpha_equivalent expr1 expr2 =
+    match expr1, expr2 with
+    | Variable (Free v1), Variable (Free v2) when v1 = v2 -> true
+    | Variable (Bounded (_, i1)), Variable (Bounded (_, i2)) when i1 = i2 ->
+        true
+    | Abstraction (_, b1), Abstraction (_, b2) -> alpha_equivalent b1 b2
+    | Application (a1e1, e1e2), Application (a2e1, a2e2) ->
+        (alpha_equivalent a2e1 a2e1) && (alpha_equivalent e1e2 a2e2)
+    | _ -> false
+
+  (*
+    Renaming operation
+
+    E {y/x}
+      - x {y/x} = y
+      - z {y/x} = z, if x ≠ z
+      - (E₁ E₂) {y/x} = (E₁ {y/x}) (E₂ {y/x})
+      - (λ x. E) {y/x} = (λ y . E {y/x})
+      - (λ z. E) {y/x} = (λ z . E {y/x}), if x ≠ z
+  *)
+  let rename expr src dst =
+    let rec aux expr =
+      match expr with
+      | Variable binding as var-> begin
+        match binding with
+        | Free name when name = src -> Variable (Free dst)
+        | Bounded (name, index) when name = src ->
+            Variable (Bounded (dst, index))
+        | _ -> var
+        end
+      | Abstraction (meta, body) ->
+        Abstraction ((if meta = src then dst else meta), (aux body))
+      | Application (e1, e2) -> Application ((aux e1), (aux e2))
+    in
+    aux expr
 end
