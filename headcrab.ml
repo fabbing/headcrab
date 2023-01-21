@@ -22,6 +22,8 @@ module Lambda = struct
      If an occurrence of x is bound by a particular λ x . in E₁,
       then that occurrence in E₁ is tied by the same abstraction λ x .
       in E₁ E₂ and E₂ E₁
+
+     The int encode the De Bruijn index
      *)
     | Bounded of string * int
 
@@ -45,9 +47,9 @@ module Lambda = struct
     | Application of expression * expression
 
 
-  let make_variable name = Variable (Free name)
+  let variable name = Variable (Free name)
 
-  let make_abstraction meta body =
+  let abstraction meta body =
     let rec bind depth expr = match expr with
       | Variable binding as var -> begin
         match binding with
@@ -59,7 +61,7 @@ module Lambda = struct
     in
     Abstraction (meta, bind 1 body)
 
-  let make_application e1 e2 = Application (e1, e2)
+  let application e1 e2 = Application (e1, e2)
 
 
   let rec print = function
@@ -74,6 +76,13 @@ module Lambda = struct
       | Application _ -> Printf.sprintf "%s (%s)" (print e1) (print e2)
       | _ -> Printf.sprintf "%s %s" (print e1) (print e2)
       end
+
+
+  let rec is_free expr var =
+    match expr with
+    | Variable v -> (match v with | Free name when name = var -> true | _ -> false)
+    | Abstraction (meta, body) -> if meta <> var then is_free body var else false
+    | Application (e1, e2) -> is_free e1 var || is_free e2 var
 
 
   (* An expression is a combinator if it does not have any free varaibles *)
