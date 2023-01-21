@@ -2,7 +2,7 @@ open Headcrab.Lambda
 
 let slide5 () =
   let e1 = Variable (Free "ID") in
-  let e2 = Abstraction ("x", (Variable (Bounded "x"))) in
+  let e2 = Abstraction ("x", (Variable (Bounded ("x", 1)))) in
   let e3 = Application ((Variable (Free "x")), (Variable (Free "y"))) in
   let e4 = Abstraction ("w", Abstraction ("x", Variable (Free "y"))) in
   let e5 = Abstraction ("x", Application (Variable (Free "y"),

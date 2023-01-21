@@ -23,7 +23,7 @@ module Lambda = struct
       then that occurrence in E₁ is tied by the same abstraction λ x .
       in E₁ E₂ and E₂ E₁
      *)
-    | Bounded of string
+    | Bounded of string * int
 
   type metavariable = string
 
@@ -48,25 +48,27 @@ module Lambda = struct
   let make_variable name = Variable (Free name)
 
   let make_abstraction meta body =
-    let rec bind = function
-      | Variable bound as var -> begin
-        match bound with
-        | Free name -> if name = meta then Variable (Bounded name) else var
-        | Bounded n -> var
+    let rec bind depth expr = match expr with
+      | Variable binding as var -> begin
+        match binding with
+        | Free name when name = meta -> Variable (Bounded (name, depth))
+        | _ -> var
         end
-      | Abstraction (m, body) -> Abstraction (m, bind body)
-      | Application (e1, e2) -> Application (bind e1, bind e2)
+      | Abstraction (m, b) -> Abstraction (m, bind (depth + 1) b)
+      | Application (e1, e2) -> Application (bind depth e1, bind depth e2)
     in
-    Abstraction (meta, bind body)
+    Abstraction (meta, bind 1 body)
+
+  let make_application e1 e2 = Application (e1, e2)
 
 
   let rec print = function
     | Variable var -> begin
       match var with
       | Free name -> Printf.sprintf "%s" name
-      | Bounded name -> Printf.sprintf "_%s" name
+      | Bounded (name, index) -> Printf.sprintf "_%d_%s" index name
       end
-    | Abstraction (meta, expr) -> Printf.sprintf "λ _%s . %s" meta (print expr)
+    | Abstraction (meta, body) -> Printf.sprintf "λ _%s . %s" meta (print body)
     | Application (e1, e2) -> begin
       match e2 with
       | Application _ -> Printf.sprintf "%s (%s)" (print e1) (print e2)
@@ -76,9 +78,7 @@ module Lambda = struct
 
   (* An expression is a combinator if it does not have any free varaibles *)
   let rec is_combinator = function
-    | Variable var -> begin
-      match var with | Free _ -> false | Bounded _ -> true
-      end
-    | Abstraction (_, expr) -> is_combinator expr
-    | Application (expr1, expr2) -> is_combinator expr1 && is_combinator expr2
+    | Variable var -> (match var with | Free _ -> false | Bounded _ -> true)
+    | Abstraction (_, body) -> is_combinator body
+    | Application (e1, e2) -> is_combinator e1 && is_combinator e2
 end
