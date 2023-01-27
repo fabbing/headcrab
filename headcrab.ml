@@ -68,18 +68,23 @@ module Lambda = struct
   let app = application
 
 
-  let rec print = function
+  let debug = false
+
+  let rec pp ppf = function
     | Variable var -> begin
       match var with
-      | Free name -> Printf.sprintf "%s" name
-      | Bounded (name, index) -> Printf.sprintf "_%s.%d" name index
+      | Free name -> Format.fprintf ppf "%s" name
+      | Bounded (name, index) -> Format.fprintf ppf "_%s.%d" name index
       end
-    | Abstraction (meta, body) -> Printf.sprintf "(λ _%s . %s)" meta (print body)
+    | Abstraction (meta, body) ->
+        Format.fprintf ppf "(λ _%s . %a)" meta pp body
     | Application (e1, e2) -> begin
       match e1, e2 with
-      | _, Application _ -> Printf.sprintf "%s (%s)" (print e1) (print e2)
-      | _ -> Printf.sprintf "%s %s" (print e1) (print e2)
+      | _, Application _ -> Format.fprintf ppf "%a (%a)" pp e1 pp e2
+      | _ -> Format.fprintf ppf "%a %a" pp e1 pp e2
       end
+
+  let print expr = Format.asprintf "%a" pp expr
 
 
   let rec is_free expr var =
@@ -125,9 +130,8 @@ module Lambda = struct
       - (λ z. E) {y/x} = (λ z . E {y/x}), if x ≠ z
   *)
   let rename expr src dst =
-    let rec aux expr =
-      match expr with
-      | Variable binding as var-> begin
+    let rec aux = function
+      | Variable binding as var -> begin
         match binding with
         | Free name when name = src -> Variable (Free dst)
         | Bounded (name, index) when name = src ->
@@ -139,4 +143,81 @@ module Lambda = struct
       | Application (e1, e2) -> Application ((aux e1), (aux e2))
     in
     aux expr
+
+
+  (*
+    Substitution
+
+    E [x→N] where E and N are lambda expressions and x is a name
+    - x [x→N] = N
+    - y [x→N] = y, if x ≠ y
+    - (E₁ E₂) [x→N] = (E₁ [x→N]) (E₂ [x→N])
+    - (λ x . E) [x→N] = (λ x . E)
+    - (λ y . E) [x→N] = (λ y . E [x→N]) if x ≠ y and y is not a free variable
+      in N
+    - (λ y . E) [x→N] = (λ y' . E {y'/y} [x→N]) if x ≠ y, y is not a free
+      variable in N, and y' is a fresh variable name
+    -
+  *)
+  let substitute expr name body =
+    if debug then
+      Printf.printf "%s [%s -> %s]\n" (print expr) name (print body);
+
+    let freshen name = (name ^ "'") in
+    let rec aux = function
+    | Variable binding as var -> begin
+      match binding with
+      | Free n when n = name -> body
+      | Bounded (n, _) when n = name -> body
+      | _ -> var
+      end
+    | Abstraction (meta, body) as abst -> begin
+      if meta <> name then
+        if is_free body name then
+          let fresh = freshen meta in
+          Abstraction (fresh, aux (rename body meta fresh))
+        else
+          Abstraction (meta, aux body)
+      else
+        abst
+      end
+    | Application (e1, e2) -> Application ((aux e1), (aux e2))
+    in
+    aux expr
+
+
+  (*
+    Execution
+
+    - Execution is a sequence of terms, resulting from calling/invoking
+    functions
+    - Each step in this sequence is call a β-reduction
+      - We can only β-reduce a β-redux (expressions in the application form)
+      - (λ x . E) N
+    - β-reduction is defined as:
+      - (λ x . E) N  β-reduces to  E [x→N]
+    - β-normal form is an expression with no reduxes
+    - Full β-reduction is reducing all reduxes regardless of where they appear
+  *)
+  let execute ?(limit=10) expr =
+    let rec aux expr step =
+      if debug then Printf.printf "[%d] %s\n" step (print expr);
+      if step >= limit then failwith "Too many step";
+
+      match expr with
+      | Variable _ -> expr
+      | Abstraction _ -> expr
+      | Application (e1, e2) as app -> begin
+        let reduced = match e1 with
+        | Abstraction (meta, body) -> substitute body meta e2
+        | _ -> begin
+          let e1 = aux e1 (step + 1) in
+          let e2 = aux e2 (step + 1) in
+          Application (e1, e2)
+          end
+        in
+        if reduced <> app then aux reduced (step + 1) else app
+      end
+    in
+    aux expr 1
 end
