@@ -1,3 +1,11 @@
+(*
+  Credit for comments goes to Adam Doupé lecture Lambda Calculus from
+  Principles of Programming Languages - F15
+
+  https://adamdoupe.com/teaching/classes/cse340-principles-of-programming-languages-f15/
+  https://adamdoupe.com/teaching/classes/cse340-principles-of-programming-languages-f15/slides/08-Lambda-Calculus.pptx
+*)
+
 module Lambda = struct
   type variable =
     (*
